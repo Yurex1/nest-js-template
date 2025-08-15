@@ -7,9 +7,8 @@ import { RefreshTokensDto } from './dto/request/refresh-tokens.dto';
 import { SignUpResponseDto } from './dto/response/sign-up-response.dto';
 import { SignInResponseDto } from './dto/response/sign-in-response.dto';
 import { SignInDto } from './dto/request/sign-in.dto';
-import { RefreshTokensResponseDto } from './dto/response/refrest-tokens-response.dto';
+import { RefreshTokensResponseDto } from './dto/response/refresh-tokens-response.dto';
 import { AuthGuard } from './guards/auth.guard';
-import type { Request } from 'express';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { User } from '../user/entities/user.entity';
 
@@ -30,7 +29,6 @@ export class AuthController {
     @Body() createAuthDto: CreateAuthDto,
   ): Promise<SignUpResponseDto> {
     const res = await this.authService.signUpAndSignIn(createAuthDto);
-    console.log({ res });
     return plainToClass(SignUpResponseDto, res);
   }
 

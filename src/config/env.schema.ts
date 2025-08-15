@@ -12,6 +12,7 @@ export const EnvSchema = Type.Object({
   DB_HOST: Type.String(),
   DB_PORT: Type.Number({ minimum: 1, maximum: 65535 }),
   DB_USER: Type.String(),
+  DB_PASS: Type.String(),
   DB_NAME: Type.String(),
 
   DB_SYNC: Type.Boolean(),

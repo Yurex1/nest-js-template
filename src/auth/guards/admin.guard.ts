@@ -9,12 +9,14 @@ import { Request } from 'express';
 import { UserService } from '../../user/user.service';
 import { UserRole } from '../../user/user.constants';
 import { extractTokenFromHeader } from '../../utils/extract-from-header.util';
+import { ConfigService } from '@nestjs/config';
 
 @Injectable()
 export class AdminGuard implements CanActivate {
   constructor(
     private jwtService: JwtService,
     private userService: UserService,
+    private configService: ConfigService,
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -27,7 +29,7 @@ export class AdminGuard implements CanActivate {
       const payload = await this.jwtService.verifyAsync<{
         userId: number;
       }>(token, {
-        secret: process.env.supersecretjwtkey,
+        secret: this.configService.get<string>('JWT_SECRET'),
       });
       const user = await this.userService.findOneOrThrowError({
         where: { id: payload.userId },

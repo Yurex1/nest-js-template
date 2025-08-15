@@ -3,7 +3,7 @@ import {
   ValidatorConstraint,
   ValidatorConstraintInterface,
 } from 'class-validator';
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 import { HasExistingIdOptions } from '../types';
@@ -11,6 +11,8 @@ import { HasExistingIdOptions } from '../types';
 @ValidatorConstraint({ name: 'HasExistingId', async: true })
 @Injectable()
 export class HasExistingIdConstraint implements ValidatorConstraintInterface {
+  private readonly logger: Logger = new Logger(HasExistingIdConstraint.name);
+
   constructor(
     @InjectDataSource()
     private readonly dataSource: DataSource,
@@ -20,7 +22,7 @@ export class HasExistingIdConstraint implements ValidatorConstraintInterface {
     if (!value) return false;
 
     if (!this.dataSource) {
-      console.error('DataSource is not available');
+      this.logger.error('DataSource is not available');
       return false;
     }
 
@@ -34,7 +36,10 @@ export class HasExistingIdConstraint implements ValidatorConstraintInterface {
       ]);
       return result.length > 0;
     } catch (error) {
-      console.error('HasExistingId validation error:', error);
+      this.logger.error(
+        'HasExistingId validation error:',
+        error instanceof Error ? error.stack : String(error),
+      );
       return false;
     }
   }
