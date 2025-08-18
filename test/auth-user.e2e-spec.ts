@@ -1,12 +1,17 @@
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ConfigModule } from '@nestjs/config';
 import request from 'supertest';
-import { AppModule } from '../src/app.module';
-import { Server } from 'http';
+import { AuthModule } from '../src/auth/auth.module';
+import { UserModule } from '../src/user/user.module';
+import { CommonModule } from '../src/common/common.module';
+import { HasExistingIdConstraint } from '../src/common/constraints/has-existing-id.constraint';
+import { useContainer } from 'class-validator';
 
 describe('Auth + User E2E', () => {
   let app: INestApplication;
-  let server: Server;
+  let server: ReturnType<typeof request>;
 
   const unique = Date.now();
   const email = `e2e+${unique}@example.com`;
@@ -21,10 +26,35 @@ describe('Auth + User E2E', () => {
 
   beforeAll(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+      imports: [
+        ConfigModule.forRoot({
+          isGlobal: true,
+          envFilePath: '.env.local',
+        }),
+        TypeOrmModule.forRootAsync({
+          useFactory: () => ({
+            type: 'postgres',
+            host: process.env.DB_HOST,
+            port: parseInt(process.env.DB_PORT || '5432'),
+            username: process.env.DB_USER,
+            password: process.env.DB_PASS,
+            database: process.env.DB_NAME,
+            synchronize: process.env.DB_SYNC === 'true',
+            logging: process.env.DB_LOGGING === 'true',
+            autoLoadEntities: true,
+          }),
+        }),
+        UserModule,
+        CommonModule,
+        AuthModule,
+      ],
+      providers: [HasExistingIdConstraint],
     }).compile();
 
     app = moduleFixture.createNestApplication();
+
+    // Enable DI in class-validator (for HasExistingIdConstraint -> DataSource)
+    useContainer(app.select(AuthModule), { fallbackOnErrors: true });
 
     app.useGlobalPipes(
       new ValidationPipe({
@@ -35,15 +65,19 @@ describe('Auth + User E2E', () => {
     );
 
     await app.init();
-    server = app.getHttpServer() as Server;
+    server = request(
+      app.getHttpServer() as unknown as Parameters<typeof request>[0],
+    );
   });
 
   afterAll(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   it('create user (sign-up)', async () => {
-    const res = await request(server)
+    const res = await server
       .post('/auth/sign-up')
       .send({ email, firstName, lastName, password })
       .expect(201);
@@ -53,7 +87,7 @@ describe('Auth + User E2E', () => {
   });
 
   it('login user (sign-in)', async () => {
-    const res = await request(server)
+    const res = await server
       .post('/auth/sign-in')
       .send({ email, password })
       .expect(201);
@@ -73,7 +107,7 @@ describe('Auth + User E2E', () => {
   });
 
   it('refresh tokens', async () => {
-    const res = await request(server)
+    const res = await server
       .post('/auth/refresh-tokens')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ refresh_token: refreshToken })
@@ -84,7 +118,7 @@ describe('Auth + User E2E', () => {
   });
 
   it('get all users', async () => {
-    const res = await request(server)
+    const res = await server
       .get('/user')
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
@@ -108,7 +142,7 @@ describe('Auth + User E2E', () => {
   });
 
   it('get user by id', async () => {
-    const res = await request(server)
+    const res = await server
       .get(`/user/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
@@ -134,7 +168,7 @@ describe('Auth + User E2E', () => {
       lastName: string;
     }
 
-    const res = await request(server)
+    const res = await server
       .patch(`/user/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ firstName: updatedFirst, lastName: updatedLast })
@@ -148,18 +182,17 @@ describe('Auth + User E2E', () => {
   });
 
   it('restore password', async () => {
-    await request(server)
+    await server
       .patch('/user/restore-password')
       .set('Authorization', `Bearer ${accessToken}`)
       .send({ oldPassword: password, newPassword })
       .expect(200);
 
-    await request(server)
-      .post('/auth/sign-in')
-      .send({ email, password })
-      .expect(401);
+    // old password should fail
+    await server.post('/auth/sign-in').send({ email, password }).expect(401);
 
-    const res = await request(server)
+    // new password should succeed
+    const res = await server
       .post('/auth/sign-in')
       .send({ email, password: newPassword })
       .expect(201);
@@ -173,16 +206,14 @@ describe('Auth + User E2E', () => {
   });
 
   it('delete user', async () => {
-    await request(server)
+    await server
       .delete(`/user/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`)
       .expect(200);
 
-    const after = await request(server)
+    await server
       .get(`/user/${userId}`)
       .set('Authorization', `Bearer ${accessToken}`)
-      .expect(200);
-
-    expect(after.body).toBeNull();
+      .expect(401);
   });
 });

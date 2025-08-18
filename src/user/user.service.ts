@@ -1,7 +1,6 @@
 import {
   BadRequestException,
   ConflictException,
-  HttpException,
   Injectable,
   NotAcceptableException,
   NotFoundException,
@@ -23,7 +22,7 @@ export class UserService {
     });
 
     if (existingUser) {
-      throw new HttpException('User already exists', 409);
+      throw new ConflictException('User already exists');
     }
 
     const hashedPassword = await hashPassword(createUserDto.password!);
@@ -113,6 +112,7 @@ export class UserService {
       }
 
       console.log(`User has been successfully deleted`);
+      return { message: 'User deleted successfully', id };
     } catch (error) {
       if (
         error instanceof BadRequestException ||
